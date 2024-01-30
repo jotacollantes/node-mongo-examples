@@ -6,30 +6,47 @@ const { Categories } = require('./modelCategories')
 
 const DB_URI = 'mongodb://localhost:27017/app_youtube_blog'
 
-mongoose.connect(DB_URI,
-    {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-        useCreateIndex: true
-    }, (err) => {
-        if (err) {
-            console.log('********* ERROR DE CONEXIÓN *******');
-        } else {
-            console.log('********* CONEXIÓN CORRECTA *******');
-        }
-    });
+// mongoose.connect(DB_URI,
+//     {
+//         useNewUrlParser: true,
+//         useUnifiedTopology: true,
+//         useCreateIndex: true
+//     }, (err) => {
+//         if (err) {
+//             console.log('********* ERROR DE CONEXIÓN *******');
+//         } else {
+//             console.log('********* CONEXIÓN CORRECTA *******');
+//         }
+//     });
 
 
-const crearCategoria = () => {
-    Categories.create(
-        {
-            name: 'Salud'
-        }
-    )
-}
+const mongoConnect= {
+    connect: async ()=>{
+        try {
+        mongoose.connect(DB_URI);
+        console.log('Mongo connection okey');
+    } catch (error) {
+        console.log('Mongo connection error');
+        throw error;
+    }
+    },
+    disconnect: async()=>{
+        await mongoose.disconnect();
+}}
 
-const crearUsuario = () => {
-    Usuarios.create(
+
+
+
+
+const crearCategoria = async ()=> {
+    
+    //await Categories.create( {name: 'Tech' });
+    await Categories.insertMany([{name: 'Tech' },{name: 'Salud' }] );
+       
+} 
+
+const crearUsuario = async() => {
+    await Usuarios.create(
         {
             name: 'Luis (edition)',
             email: 'luis@demo.com',
@@ -39,23 +56,29 @@ const crearUsuario = () => {
     )
 }
 
-const createPublicacion = () => {
+const createPublicacion = async() => {
     const listPost = [
+        // {
+        //     title: 'Relaciones publicas',
+        //     description: 'Hola mundo bla bla',
+        //     author: new mongoose.Types.ObjectId("65b7ff9f746eac711195fa57"),
+        //     categories: ['Tech']
+        // },
+        // {
+        //     title: 'Noticia IMPORT Covid (Tech)',
+        //     description: 'Hola mundo bla bla',
+        //     author: new mongoose.Types.ObjectId("65b7ff9f746eac711195fa57"),
+        //     categories: ['Tech', 'Salud']
+        // }
         {
-            title: 'Relaciones publicas',
+            title: 'Mi Post',
             description: 'Hola mundo bla bla',
-            author: mongoose.Types.ObjectId("6021150a1f183b248c8a8e3f"),
+            author: new mongoose.Types.ObjectId("65b7ff9f746eac711195fa57"),
             categories: ['Tech']
-        },
-        {
-            title: 'Noticia IMPORT Covid (Tech)',
-            description: 'Hola mundo bla bla',
-            author: mongoose.Types.ObjectId("6021150a1f183b248c8a8e3f"),
-            categories: ['Tech', 'Salud']
         }
     ]
 
-    Publicaciones.insertMany(listPost)
+    await Publicaciones.insertMany(listPost)
 }
 
 // createPublicacion();
@@ -143,8 +166,9 @@ const publicacionConUsuario = async () => {
                     as: "usuarioAuthor"
                 }
             },
+            //!Convierte un array a objeto y muestra un documento por cada elemento del arra
             { $unwind: "$usuarioAuthor" },
-            { $match: { title: "Mi post!" } }
+            { $match: { title: "Mi Post" } }
         ]
     )
 
@@ -154,43 +178,57 @@ const publicacionConUsuario = async () => {
 
 const listaCategoriesConPublicaciones = async () => {
 
-    const resultado = await Publicaciones.aggregate( // (1) Padre --- (Categories)
+    const resultado = await Categories.aggregate( // (1) Padre --- (Categories)
         [
             {
                 $lookup:
                 {
-                    from: "categories", // (2) Hijo --- (publicaciones)
+                    from: "publicaciones", // (2) Hijo --- (publicaciones)
                     let: {
-                        aliasNombreCategoria: "$categories"// (1) Nombre de la categoria "Tech" (string)
+                        aliasNombreCategoria: "$name"// (1) Nombre de la categoria "Tech" (string)
                     },
                     pipeline: [ // (2) publicaciones
                         {
                             $match: {
                                 $expr: {
-                                    $in: ["$name", "$$aliasNombreCategoria"] // [Salud]
+                                    //!busca un string en el array $categories. $$aliasNombreCategoria tiene Salud o Tech
+                                    $in: ["$$aliasNombreCategoria","$categories"] 
                                 }
                             }
                         }
                     ],
-                    as: 'listDeCategorias'
+                    as: 'listDePublicaciones'
                 }
-            }
+            },
+            { $unwind: "$listDePublicaciones" },
         ]
     )
 
-    console.log('*********** RESULTADOS ***********', JSON.stringify(resultado));
+    console.log('*********** RESULTADOS ***********', JSON.stringify(resultado,null,2));
 }
 
-// crearCategoria()
-
-// publicacionConUsuario();
 
 
-// borrarPost();
-//  editarPublicacion()
-//  buscarOCrear()
-//  buscarPorCoincidenciaTodos()
-// buscarPorId();
-// crearUsuario()
-// createPublicacion()
-listaCategoriesConPublicaciones();
+
+(async ()=> {
+   await main();
+  })();
+  
+  
+   async function main() {
+    
+    await mongoConnect.connect()
+    //await crearCategoria()
+    //await publicacionConUsuario();
+    // borrarPost();
+    //  editarPublicacion()
+    //  buscarOCrear()
+    //  buscarPorCoincidenciaTodos()
+    // buscarPorId();
+    //await crearUsuario()
+    //await createPublicacion()
+    await listaCategoriesConPublicaciones();  
+    await mongoConnect.disconnect()
+  }
+
+
